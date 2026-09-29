@@ -1,0 +1,34 @@
+# Regenerate VatioExample.xcodeproj with `xcodegen generate` from this folder.
+name: VatioExample
+options:
+  bundleIdPrefix: ai.vatio
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  Vatio:
+    path: ..
+targets:
+  VatioExample:
+    type: application
+    platform: iOS
+    sources: [VatioExample]
+    dependencies:
+      - package: Vatio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.vatio.example
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_CFBundleDisplayName: Vatio Example
+        SWIFT_VERSION: "5.0"
+    info:
+      path: VatioExample/Info.plist
+      properties:
+        # http://localhost for a local backend; vatio.ai is https anyway.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [vatioexample]
