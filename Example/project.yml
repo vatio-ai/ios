@@ -23,6 +23,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_CFBundleDisplayName: Vatio Example
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Para enviarle notas de voz al asistente.
         SWIFT_VERSION: "5.0"
     info:
       path: VatioExample/Info.plist

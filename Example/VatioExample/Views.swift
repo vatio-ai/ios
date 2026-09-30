@@ -1,3 +1,5 @@
+import AVFoundation
+import PhotosUI
 import SwiftUI
 import Vatio
 
@@ -100,7 +102,7 @@ struct ConversationView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                AskBar(placeholder: "Escribe un mensaje") { store.send($0) }
+                Composer { text, files in store.send(text, attachments: files) }
             }
             .navigationTitle("Asistente")
             .navigationBarTitleDisplayMode(.inline)
@@ -126,7 +128,14 @@ struct Bubble: View {
     var body: some View {
         HStack {
             if message.isFromVisitor { Spacer(minLength: 40) }
-            TypewriterText(text: message.content, paints: paints, onProgress: onProgress, onFinish: onFinish)
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(message.attachments) { AttachmentView(attachment: $0, onVisitorSide: message.isFromVisitor) }
+                // A file-only message carries a stand-in ("Image"); the file
+                // above already says it.
+                if !message.isMediaLabel && !message.content.isEmpty {
+                    TypewriterText(text: message.content, paints: paints, onProgress: onProgress, onFinish: onFinish)
+                }
+            }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(message.isFromVisitor ? Color.accentColor : Color(.secondarySystemBackground))
@@ -186,7 +195,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Workspace")
                 } footer: {
-                    Text("Agrega ios-app://\(Bundle.main.bundleIdentifier ?? "") a widget.allowed_origins en vatio.yml.")
+                    Text("Agrega ios-app://\(Bundle.main.bundleIdentifier ?? "") a allowed_origins en vatio.yml.")
                 }
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -254,7 +263,13 @@ struct TypewriterText: View {
     }
 
     private func paint() async {
-        guard paints else { return }
+        // A reply that stopped needing the effect before this view appeared
+        // -- history loaded by resume() is settled right after -- missed the
+        // onChange above, so show it whole here.
+        guard paints else {
+            shown = text.count
+            return
+        }
         var last = Date()
         while shown < text.count {
             try? await Task.sleep(nanoseconds: 16_000_000)
@@ -349,6 +364,146 @@ struct FeedbackCard: View {
         Task {
             do { try await call() } catch { self.error = (error as? VatioError)?.message ?? error.localizedDescription }
             sending = false
+        }
+    }
+}
+
+/// The conversation's input: text, a photo from the library, or a voice note.
+struct Composer: View {
+    var onSend: (String, [VatioUpload]) -> Void
+
+    @State private var text = ""
+    @State private var photo: PhotosPickerItem?
+    @StateObject private var recorder = VoiceRecorder()
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PhotosPicker(selection: $photo, matching: .images) {
+                Image(systemName: "paperclip").font(.title3)
+            }
+            if recorder.isRecording {
+                Label("Grabando… toca para enviar", systemImage: "waveform")
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                TextField("Escribe un mensaje", text: $text)
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.send)
+                    .onSubmit(sendText)
+            }
+            if text.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button(action: toggleRecording) {
+                    Image(systemName: recorder.isRecording ? "stop.circle.fill" : "mic.circle.fill").font(.title2)
+                }
+                .tint(recorder.isRecording ? .red : .accentColor)
+            } else {
+                Button(action: sendText) { Image(systemName: "arrow.up.circle.fill").font(.title2) }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .onChange(of: photo) { item in
+            guard let item else { return }
+            photo = nil
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                let type = item.supportedContentTypes.first
+                let ext = type?.preferredFilenameExtension ?? "jpg"
+                onSend("", [VatioUpload(data: data, filename: "foto.\(ext)", contentType: type?.preferredMIMEType ?? "image/jpeg")])
+            }
+        }
+    }
+
+    private func sendText() {
+        let message = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return }
+        text = ""
+        onSend(message, [])
+    }
+
+    private func toggleRecording() {
+        if recorder.isRecording {
+            if let note = recorder.stop() { onSend("", [note]) }
+        } else {
+            Task { await recorder.start() }
+        }
+    }
+}
+
+/// Records an AAC .m4a, one of the formats Vatio transcribes.
+@MainActor
+final class VoiceRecorder: ObservableObject {
+    @Published private(set) var isRecording = false
+    private var recorder: AVAudioRecorder?
+    private let url = FileManager.default.temporaryDirectory.appendingPathComponent("nota.m4a")
+
+    func start() async {
+        guard await Self.permission() else { return }
+        let session = AVAudioSession.sharedInstance()
+        try? session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker])
+        try? session.setActive(true)
+        let settings: [String: Any] = [
+            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+            AVSampleRateKey: 44_100,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
+        ]
+        recorder = try? AVAudioRecorder(url: url, settings: settings)
+        isRecording = recorder?.record() ?? false
+    }
+
+    func stop() -> VatioUpload? {
+        recorder?.stop()
+        recorder = nil
+        isRecording = false
+        return try? VatioUpload(fileURL: url)
+    }
+
+    private static func permission() async -> Bool {
+        await withCheckedContinuation { continuation in
+            if #available(iOS 17, *) {
+                AVAudioApplication.requestRecordPermission { continuation.resume(returning: $0) }
+            } else {
+                AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
+            }
+        }
+    }
+}
+
+/// How this app draws a file on a message: the image, a player for a voice
+/// note, a link for anything else. While pending there is no URL yet.
+struct AttachmentView: View {
+    let attachment: VatioAttachment
+    let onVisitorSide: Bool
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        switch attachment.kind {
+        case .image:
+            AsyncImage(url: attachment.url) { image in
+                image.resizable().scaledToFit()
+            } placeholder: {
+                ProgressView().frame(width: 160, height: 120)
+            }
+            .frame(maxWidth: 220, maxHeight: 220)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        case .audio:
+            Button {
+                guard let url = attachment.url else { return }
+                player = AVPlayer(url: url)
+                player?.play()
+            } label: {
+                Label("Nota de voz", systemImage: "play.circle.fill")
+            }
+            .foregroundStyle(onVisitorSide ? .white : .accentColor)
+        case .video, .file:
+            if let url = attachment.url {
+                Link(destination: url) { Label(attachment.filename, systemImage: "doc") }
+                    .foregroundStyle(onVisitorSide ? .white : .accentColor)
+            } else {
+                Label(attachment.filename, systemImage: "doc")
+            }
         }
     }
 }

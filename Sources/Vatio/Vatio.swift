@@ -8,10 +8,10 @@ import Foundation
 ///
 /// `token` is a publishable token (`vatpub_…`), meant to ship inside your app.
 /// It only works once the workspace allowlists the app: add
-/// `ios-app://YOUR.BUNDLE.ID` under `widget.allowed_origins` in `vatio.yml`.
+/// `ios-app://YOUR.BUNDLE.ID` to `allowed_origins` in `vatio.yml`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.1.0"
+    public static let version = "0.2.0"
 
     public let workspace: String
     public let token: String
@@ -81,6 +81,42 @@ public struct Vatio: Sendable {
     }
 
     func request(_ method: String, _ path: String, bearer: String, body: [String: Any]? = nil) async throws -> Data {
+        var request = try urlRequest(method, path, bearer: bearer)
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        return try await send(request)
+    }
+
+    /// multipart/form-data: `content` and one `files[]` part per upload.
+    func upload(_ path: String, bearer: String, content: String, files: [VatioUpload]) async throws -> Data {
+        var request = try urlRequest("POST", path, bearer: bearer)
+        let boundary = "vatio-\(UUID().uuidString)"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func part(_ headers: String, _ data: Data) {
+            body.append(Data("--\(boundary)\r\n\(headers)\r\n\r\n".utf8))
+            body.append(data)
+            body.append(Data("\r\n".utf8))
+        }
+        if !content.isEmpty {
+            part("Content-Disposition: form-data; name=\"content\"", Data(content.utf8))
+        }
+        for file in files {
+            let name = file.filename.replacingOccurrences(of: "\"", with: "")
+            part(
+                "Content-Disposition: form-data; name=\"files[]\"; filename=\"\(name)\"\r\nContent-Type: \(file.contentType)",
+                file.data
+            )
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+        request.httpBody = body
+        return try await send(request)
+    }
+
+    private func urlRequest(_ method: String, _ path: String, bearer: String) throws -> URLRequest {
         let workspacePath = workspace.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? workspace
         guard let url = URL(string: "api/public/v1/\(workspacePath)/\(path)", relativeTo: baseURL) else {
             throw VatioError(code: "sdk_error", message: "invalid URL for \(path)")
@@ -91,11 +127,10 @@ public struct Vatio: Sendable {
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.setValue(origin, forHTTPHeaderField: "Origin")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let body {
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        }
+        return request
+    }
 
+    private func send(_ request: URLRequest) async throws -> Data {
         let data: Data
         let response: URLResponse
         do {

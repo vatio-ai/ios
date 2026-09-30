@@ -263,6 +263,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VatioExample/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Vatio Example";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Para enviarle notas de voz al asistente.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -286,6 +287,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VatioExample/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Vatio Example";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Para enviarle notas de voz al asistente.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (

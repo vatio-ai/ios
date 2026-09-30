@@ -99,15 +99,40 @@ public final class VatioChat: ObservableObject {
     /// Sends the visitor's message. It appears in `messages` at once, marked
     /// `isPending`, and the reply follows through `messages` and `isTyping`.
     ///
+    /// `attachments` adds up to four files (see `VatioUpload`); with them,
+    /// `text` may be empty. Once the server answers, the pending message is
+    /// replaced by the stored one, file URLs included. A voice note is
+    /// transcribed in the background: the message shows "Audio"
+    /// (`isMediaLabel`) at first, and its `content` becomes the transcript a
+    /// few seconds later, in place.
+    ///
     /// The first call starts the conversation. Throws `blank_content`,
-    /// `content_too_long` (4,000 characters), `rate_limited`,
+    /// `content_too_long` (4,000 characters), `too_many_files`,
+    /// `file_too_large`, `unsupported_file_type`, `rate_limited`,
     /// `origin_not_allowed`, …; on failure the pending message is removed, so
-    /// put the text back in your field.
-    public func send(_ text: String) async throws {
+    /// put the text and files back.
+    public func send(_ text: String = "", attachments: [VatioUpload] = []) async throws {
         let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { throw VatioError(code: "blank_content", message: "content is required") }
+        guard !content.isEmpty || !attachments.isEmpty else {
+            throw VatioError(code: "blank_content", message: "content or attachments are required")
+        }
+        guard attachments.count <= 4 else {
+            throw VatioError(code: "too_many_files", message: "at most 4 files per message")
+        }
+        if let large = attachments.first(where: { $0.data.count > VatioUpload.maxBytes }) {
+            throw VatioError(code: "file_too_large", message: "\(large.filename) is over 8 MB")
+        }
 
-        let pending = VatioMessage(id: nextPendingID, role: .user, content: content, createdAt: Date(), isPending: true)
+        let pendingFiles = attachments.enumerated().map { index, file in
+            VatioAttachment(
+                id: -(index + 1), filename: file.filename, contentType: file.contentType,
+                byteSize: file.data.count, kind: file.kind, url: nil
+            )
+        }
+        let pending = VatioMessage(
+            id: nextPendingID, role: .user, content: content, createdAt: Date(), isPending: true,
+            attachments: pendingFiles, isMediaLabel: content.isEmpty
+        )
         nextPendingID -= 1
         messages.append(pending)
         lastError = nil
@@ -116,12 +141,16 @@ public final class VatioChat: ObservableObject {
             let chat = try await ensureStarted(createIfMissing: true)
             await ready()
 
-            let data = try await vatio.request(
-                "POST", "chats/\(chat.chatID)/messages", bearer: chat.chatToken, body: ["content": content]
-            )
-            let id = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["user_message_id"] as? Int
+            let data = attachments.isEmpty
+                ? try await vatio.request(
+                    "POST", "chats/\(chat.chatID)/messages", bearer: chat.chatToken, body: ["content": content]
+                )
+                : try await vatio.upload(
+                    "chats/\(chat.chatID)/messages", bearer: chat.chatToken, content: content, files: attachments
+                )
+            let result = try? JSONDecoder().decode(WireSendResult.self, from: data)
 
-            confirm(pending, as: id)
+            confirm(pending, as: result?.message?.message, id: result?.user_message_id)
             // Writing again moves the conversation on, and the moment with it.
             if feedback?.rating == nil { feedback = nil }
             if !subscribed { pollFor(Self.pollWindow) }
@@ -311,6 +340,15 @@ public final class VatioChat: ObservableObject {
         case .feedback(let offered):
             feedback = offered
 
+        case .updated(let id, let content, let isMediaLabel):
+            // A voice note's transcript, in where the "Audio" label stood.
+            guard let index = messages.firstIndex(where: { $0.id == id }) else { return }
+            let old = messages[index]
+            messages[index] = VatioMessage(
+                id: old.id, role: old.role, content: content, createdAt: old.createdAt,
+                attachments: old.attachments, isMediaLabel: isMediaLabel
+            )
+
         case .closed:
             cable = nil
             subscribed = false
@@ -417,13 +455,18 @@ public final class VatioChat: ObservableObject {
 
     // MARK: - State
 
-    private func confirm(_ pending: VatioMessage, as id: Int?) {
+    // The stored message when the server returned it (its transcript, its
+    // file URLs); otherwise the pending one under the server's id.
+    private func confirm(_ pending: VatioMessage, as stored: VatioMessage?, id: Int?) {
         guard let index = messages.firstIndex(where: { $0.id == pending.id }) else { return }
-        guard let id, !messages.contains(where: { $0.id == id }) else {
+        guard let id = stored?.id ?? id, !messages.contains(where: { $0.id == id }) else {
             messages.remove(at: index)
             return
         }
-        messages[index] = VatioMessage(id: id, role: .user, content: pending.content, createdAt: pending.createdAt)
+        messages[index] = stored ?? VatioMessage(
+            id: id, role: .user, content: pending.content, createdAt: pending.createdAt,
+            attachments: pending.attachments, isMediaLabel: pending.isMediaLabel
+        )
         lastMessageID = max(lastMessageID, id)
         sort()
     }

@@ -4,12 +4,12 @@ import Vatio
 // A dummy app for trying the SDK: a home screen with an ask bar at the
 // bottom, a conversation tab where the agent answers, and a settings tab for
 // the workspace and token. Allow `ios-app://ai.vatio.example` in the
-// workspace's `widget.allowed_origins` first.
+// workspace's `allowed_origins` first.
 //
 // Settings are UserDefaults, so they can also come from launch arguments:
 //   xcrun simctl launch booted ai.vatio.example -workspace acme -token vatpub_...
 // and `-ask "hola"` there, or opening `vatioexample://ask?q=hola`, asks a
-// question the way the bar does.
+// question the way the bar does. `-askFile /path/to/file.m4a` sends a file.
 @main
 struct VatioExampleApp: App {
     @StateObject private var store = ChatStore()
@@ -44,6 +44,11 @@ struct VatioExampleApp: App {
                 // Launch arguments live in UserDefaults' argument domain, so
                 // this is only set for the launch that passed it.
                 if let question = UserDefaults.standard.string(forKey: "ask") { ask(question) }
+                if let path = UserDefaults.standard.string(forKey: "askFile"),
+                   let file = try? VatioUpload(fileURL: URL(fileURLWithPath: path)) {
+                    tab = .conversation
+                    store.send("", attachments: [file])
+                }
             }
             .onOpenURL { url in
                 let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems
@@ -92,11 +97,11 @@ final class ChatStore: ObservableObject {
         chat = VatioChat(Vatio(workspace: workspace, token: token, baseURL: url))
     }
 
-    func send(_ question: String) {
+    func send(_ question: String, attachments: [VatioUpload] = []) {
         sendError = nil
         Task {
             do {
-                try await chat.send(question)
+                try await chat.send(question, attachments: attachments)
             } catch let error as VatioError {
                 sendError = "\(error.code): \(error.message)"
             } catch {

@@ -11,6 +11,7 @@ final class Cable {
         case typing(Bool)
         case message(VatioMessage)
         case feedback(VatioFeedback?)
+        case updated(id: Int, content: String, isMediaLabel: Bool)
         case closed
     }
 
@@ -117,6 +118,13 @@ final class Cable {
                       let bytes = try? JSONSerialization.data(withJSONObject: payload),
                       let wire = try? JSONDecoder().decode(WireMessage.self, from: bytes) else { return }
                 onEvent(.message(wire.message))
+            case "message_updated":
+                guard let update = event["message"] as? [String: Any], let id = update["id"] as? Int else { return }
+                onEvent(.updated(
+                    id: id,
+                    content: update["content"] as? String ?? "",
+                    isMediaLabel: update["content_is_media_label"] as? Bool ?? false
+                ))
             case "feedback":
                 let wire = event["feedback"]
                     .flatMap { try? JSONSerialization.data(withJSONObject: $0) }

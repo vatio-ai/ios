@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 /// One message in a conversation, as the visitor sees it.
 public struct VatioMessage: Identifiable, Hashable, Sendable {
@@ -28,15 +29,76 @@ public struct VatioMessage: Identifiable, Hashable, Sendable {
     /// acknowledged yet. It is shown straight away so the question is on
     /// screen before the network answers.
     public let isPending: Bool
+    /// The visitor's own files. While `isPending` their `url` is nil.
+    public let attachments: [VatioAttachment]
+    /// `content` is only a stand-in ("Image", "Audio") for a message that was
+    /// just a file: draw the attachment, not the word.
+    public let isMediaLabel: Bool
 
     public var isFromVisitor: Bool { role == .user }
 
-    public init(id: Int, role: Role, content: String, createdAt: Date? = nil, isPending: Bool = false) {
+    public init(
+        id: Int, role: Role, content: String, createdAt: Date? = nil, isPending: Bool = false,
+        attachments: [VatioAttachment] = [], isMediaLabel: Bool = false
+    ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.isPending = isPending
+        self.attachments = attachments
+        self.isMediaLabel = isMediaLabel
+    }
+}
+
+/// A file on a message.
+public struct VatioAttachment: Identifiable, Hashable, Sendable {
+    public enum Kind: String, Sendable {
+        case image, audio, video, file
+    }
+
+    public let id: Int
+    public let filename: String
+    public let contentType: String
+    public let byteSize: Int
+    public let kind: Kind
+    /// Absolute and signed; loads without the chat credential. Nil while the
+    /// message is pending.
+    public let url: URL?
+}
+
+/// A file to attach to `send`: an image (JPEG, PNG, WebP, GIF, HEIC), a PDF,
+/// a text file, or audio (M4A, MP3, OGG, WAV, AAC, FLAC), up to 8 MB. A voice
+/// note is transcribed, and the transcript becomes the message's content.
+public struct VatioUpload: Sendable {
+    public static let maxBytes = 8 * 1024 * 1024
+
+    public let data: Data
+    public let filename: String
+    public let contentType: String
+
+    public init(data: Data, filename: String, contentType: String) {
+        self.data = data
+        self.filename = filename
+        self.contentType = contentType
+    }
+
+    /// Reads a local file, taking its type from the extension -- an
+    /// `AVAudioRecorder` .m4a, a photo exported to disk, a picked PDF.
+    public init(fileURL: URL) throws {
+        let type = UTType(filenameExtension: fileURL.pathExtension)
+        self.init(
+            data: try Data(contentsOf: fileURL),
+            filename: fileURL.lastPathComponent,
+            contentType: type?.preferredMIMEType ?? "application/octet-stream"
+        )
+    }
+
+    var kind: VatioAttachment.Kind {
+        if contentType.hasPrefix("image/") { return .image }
+        if contentType.hasPrefix("audio/") { return .audio }
+        if contentType.hasPrefix("video/") { return .video }
+        return .file
     }
 }
 
@@ -127,15 +189,44 @@ struct WireMessage: Decodable {
     let content: String?
     let created_at: String?
     let occurred_at: String?
+    let attachments: [WireAttachment]?
+    let content_is_media_label: Bool?
 
     var message: VatioMessage {
         VatioMessage(
             id: id,
             role: .init(role),
             content: content ?? "",
-            createdAt: parseDate(occurred_at ?? created_at)
+            createdAt: parseDate(occurred_at ?? created_at),
+            attachments: (attachments ?? []).map(\.attachment),
+            isMediaLabel: content_is_media_label ?? false
         )
     }
+}
+
+struct WireAttachment: Decodable {
+    let id: Int
+    let filename: String
+    let content_type: String?
+    let byte_size: Int?
+    let kind: String?
+    let url: String?
+
+    var attachment: VatioAttachment {
+        VatioAttachment(
+            id: id,
+            filename: filename,
+            contentType: content_type ?? "application/octet-stream",
+            byteSize: byte_size ?? 0,
+            kind: kind.flatMap(VatioAttachment.Kind.init(rawValue:)) ?? .file,
+            url: url.flatMap(URL.init(string:))
+        )
+    }
+}
+
+struct WireSendResult: Decodable {
+    let user_message_id: Int?
+    let message: WireMessage?
 }
 
 struct WireFeedback: Decodable {

@@ -15,10 +15,9 @@ workspace allowlists. Your app's origin is `ios-app://` plus its bundle id:
 
 ```yaml
 # vatio.yml
-widget:
-  allowed_origins:
-    - https://acme.com
-    - ios-app://com.acme.app
+allowed_origins:
+  - https://acme.com
+  - ios-app://com.acme.app
 ```
 
 ```bash
@@ -54,6 +53,7 @@ chat.lastError                       // background failures; send() throws inste
 chat.feedback                        // a feedback moment on offer, or nil
 
 try await chat.send("hola")          // starts the conversation on first call
+try await chat.send(attachments: [upload])   // images, PDFs, text, audio (8 MB)
 await chat.resume()                  // reopen the stored conversation, if any
 chat.startOver()                     // forget it; next send starts a new one
 chat.close()                         // disconnect
@@ -189,6 +189,33 @@ xcrun simctl launch booted ai.vatio.example \
 
 `project.yml` regenerates the project with `xcodegen generate`.
 
+## Files and voice notes
+
+`send(_:attachments:)` takes up to four `VatioUpload`s — an image (JPEG, PNG,
+WebP, GIF, HEIC), a PDF, a text file, or audio (M4A, MP3, OGG, WAV, AAC, FLAC),
+up to 8 MB each. With files, the text may be empty:
+
+```swift
+let photo = VatioUpload(data: jpegData, filename: "photo.jpg", contentType: "image/jpeg")
+try await chat.send("Is this the right part?", attachments: [photo])
+
+// An AVAudioRecorder recording (AAC in .m4a) -- the type comes from the extension.
+try await chat.send(attachments: [try VatioUpload(fileURL: recordingURL)])
+```
+
+The pending message shows the files at once, with `url == nil`; when the
+server answers it is replaced by the stored message, whose `VatioAttachment`s
+each have a signed, absolute `url`. A voice note is transcribed in the
+background: the message reads "Audio" at first and its `content` becomes the
+transcript a few seconds later, in place. The agent waits for it. When `isMediaLabel` is true, `content` is only a stand-in
+("Image", "Audio") for a file-only message: draw the attachment instead.
+
+The server reads a file's type from its bytes and refuses one the agent cannot
+read (`unsupported_file_type`). `Example/` has a composer with a photo picker
+and a voice recorder (`Composer`, `VoiceRecorder`, `AttachmentView` in
+`Views.swift`); recording needs `NSMicrophoneUsageDescription` in your
+Info.plist.
+
 ## Visitor feedback
 
 Vatio offers a feedback moment at most once per conversation, when a request
@@ -256,10 +283,11 @@ Every failure is a `VatioError` with a `code`, a `message` and the HTTP
 
 | `code` | Meaning |
 |---|---|
-| `origin_not_allowed` | `ios-app://<bundle id>` is not in `widget.allowed_origins` |
+| `origin_not_allowed` | `ios-app://<bundle id>` is not in `allowed_origins` |
 | `wrong_token_kind` | The token is not a `vatpub_` publishable token |
 | `no_agent_deployed` | Nothing is published to the token's environment |
 | `blank_content`, `content_too_long` | The message is empty or over 4,000 characters |
+| `too_many_files`, `file_too_large`, `unsupported_file_type` | More than four files, one over 8 MB, or a type the agent cannot read |
 | `rate_limited` | Too many requests; back off |
 | `subscription_rejected` | The chat credential expired; the next `send` starts a new conversation |
 | `network_error` | The request never got an answer |
