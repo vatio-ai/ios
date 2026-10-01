@@ -25,11 +25,11 @@ vatio push
 vatio tokens create --env live --label ios
 ```
 
-**2. Add the package** `https://github.com/urcalab/vatio-ios` in Xcode
+**2. Add the package** `https://github.com/vatio-ai/ios` in Xcode
 (File → Add Package Dependencies…) or in `Package.swift`, and import `Vatio`:
 
 ```swift
-.package(url: "https://github.com/urcalab/vatio-ios", from: "0.1.0")
+.package(url: "https://github.com/vatio-ai/ios", from: "0.1.0")
 ```
 
 **3. Create a client** with the `vatpub_` token. It is meant to ship inside
@@ -298,5 +298,9 @@ Tags follow semver, and `Vatio.version` matches the tag. A breaking change to
 the public API is a new major version, so `from: "0.1.0"` never moves you to
 one by surprise.
 
-This repository is published from the one Vatio is built in, so changes land
-there first. Report a problem at <https://vatio.ai> or with `vatio issue`.
+## Issues
+
+Bugs and questions go to [issues](https://github.com/vatio-ai/ios/issues), or
+`vatio issue` from the CLI. This repository is a read-only mirror of the SDK
+as it ships inside Vatio, so a pull request cannot be merged here: open an
+issue describing the change instead.
