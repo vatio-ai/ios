@@ -11,7 +11,7 @@ import Foundation
 /// `ios-app://YOUR.BUNDLE.ID` to `allowed_origins` in `vatio.yml`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.2.0"
+    public static let version = "0.3.0"
 
     public let workspace: String
     public let token: String
@@ -118,7 +118,7 @@ public struct Vatio: Sendable {
 
     private func urlRequest(_ method: String, _ path: String, bearer: String) throws -> URLRequest {
         let workspacePath = workspace.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? workspace
-        guard let url = URL(string: "api/public/v1/\(workspacePath)/\(path)", relativeTo: baseURL) else {
+        guard let url = URL(string: "api/visitor/v1/\(workspacePath)/\(path)", relativeTo: baseURL) else {
             throw VatioError(code: "sdk_error", message: "invalid URL for \(path)")
         }
 

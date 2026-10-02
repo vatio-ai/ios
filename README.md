@@ -300,7 +300,6 @@ one by surprise.
 
 ## Issues
 
-Bugs and questions go to [issues](https://github.com/vatio-ai/ios/issues), or
-`vatio issue` from the CLI. This repository is a read-only mirror of the SDK
+Bugs and questions go to [issues](https://github.com/vatio-ai/ios/issues). This repository is a read-only mirror of the SDK
 as it ships inside Vatio, so a pull request cannot be merged here: open an
 issue describing the change instead.
