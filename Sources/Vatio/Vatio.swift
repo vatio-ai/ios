@@ -11,7 +11,7 @@ import Foundation
 /// `ios-app://YOUR.BUNDLE.ID` to `allowed_origins` in `vatio.yml`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.3.0"
+    public static let version = "0.4.0"
 
     public let workspace: String
     public let token: String

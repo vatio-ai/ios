@@ -312,7 +312,7 @@ struct FeedbackCard: View {
                     .foregroundStyle(.green)
             } else {
                 HStack {
-                    Text("¿Cómo lo hizo \(feedback.agentName)?").font(.subheadline.weight(.semibold))
+                    Text(feedback.question ?? "¿Cómo lo hizo \(feedback.agentName)?").font(.subheadline.weight(.semibold))
                     Spacer()
                     Button("Omitir") { answer { try await chat.dismissFeedback() } }
                         .font(.footnote)

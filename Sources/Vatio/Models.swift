@@ -154,6 +154,9 @@ public struct VatioFeedback: Hashable, Sendable {
     public let agentName: String
     /// The reply the moment is attached to.
     public let messageID: Int
+    /// The agent's own words to ask with, written for this conversation.
+    /// nil when there are none; ask in your own words then.
+    public let question: String?
     /// Set once the visitor answered.
     public let rating: Rating?
     public let submittedAt: Date?
@@ -232,6 +235,7 @@ struct WireSendResult: Decodable {
 struct WireFeedback: Decodable {
     let agent_name: String
     let message_id: Int
+    let question: String?
     let rating: String?
     let submitted_at: String?
     let dismissed: Bool?
@@ -240,6 +244,7 @@ struct WireFeedback: Decodable {
         VatioFeedback(
             agentName: agent_name,
             messageID: message_id,
+            question: question,
             rating: rating.flatMap(VatioFeedback.Rating.init(rawValue:)),
             submittedAt: parseDate(submitted_at),
             dismissed: dismissed ?? false
