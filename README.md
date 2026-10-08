@@ -240,7 +240,7 @@ Pass the same token to `vatio.conversations(visitorToken:)`. A different token
 subject is a different person, with its own conversation and history, so
 signing out of your app signs out of the chat too. An anonymous conversation is
 kept when the user signs in. See
-[Sessions and channels](https://docs.vatio.ai/authentication/sessions).
+[Sessions and channels](https://vatio.ai/docs/authentication/sessions).
 
 ## Options
 
