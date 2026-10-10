@@ -11,7 +11,7 @@ import Foundation
 /// `ios-app://YOUR.BUNDLE.ID` to `allowed_origins` in `vatio.yml`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.4.0"
+    public static let version = "0.4.1"
 
     public let workspace: String
     public let token: String
@@ -60,7 +60,13 @@ public struct Vatio: Sendable {
         try validateToken()
         guard let visitorRef = storage(visitorToken).visitorRef else { return [] }
 
-        let data = try await request("GET", "chats?visitor_ref=\(queryEscaped(visitorRef))", bearer: token)
+        // A conversation this person had signed in is listed only alongside
+        // their token.
+        var request = try urlRequest("GET", "chats?visitor_ref=\(queryEscaped(visitorRef))", bearer: token)
+        if let visitorToken, !visitorToken.isEmpty {
+            request.setValue(visitorToken, forHTTPHeaderField: "Vatio-Visitor-Token")
+        }
+        let data = try await send(request)
         return (try decode(WireList<WireConversation>.self, data).data ?? []).map(\.conversation)
     }
 
