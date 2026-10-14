@@ -7,8 +7,9 @@ import Foundation
 ///     try await chat.send("hola")
 ///
 /// `token` is a publishable token (`vatpub_…`), meant to ship inside your app.
-/// It only works once the workspace allowlists the app: add
-/// `ios-app://YOUR.BUNDLE.ID` to `allowed_origins` in `vatio.yml`.
+/// It only works from the origins the token allows, so allow the app on it:
+/// `vatio tokens create --origin ios-app://YOUR.BUNDLE.ID`, or add the origin
+/// to an existing token with `vatio tokens origins`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
     public static let version = "0.4.1"
