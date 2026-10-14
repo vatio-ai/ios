@@ -38,7 +38,7 @@ or the tokens section of **Channels → Web widget** in the inbox.
 (File → Add Package Dependencies…) or in `Package.swift`, and import `Vatio`:
 
 ```swift
-.package(url: "https://github.com/vatio-ai/ios", from: "0.4.1")
+.package(url: "https://github.com/vatio-ai/ios", from: "0.4.2")
 ```
 
 **3. Create a client** with the `vatpub_` token. It is meant to ship inside

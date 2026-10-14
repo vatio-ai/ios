@@ -12,7 +12,7 @@ import Foundation
 /// to an existing token with `vatio tokens origins`.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.4.1"
+    public static let version = "0.4.2"
 
     public let workspace: String
     public let token: String

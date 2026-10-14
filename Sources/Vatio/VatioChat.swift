@@ -59,11 +59,22 @@ public final class VatioChat: ObservableObject {
     private var readyWaiters: [CheckedContinuation<Void, Never>] = []
     private var pollTask: Task<Void, Never>?
     private var pollUntil = Date.distantPast
+    // When the agent last said something new, for polling to look for the
+    // feedback moment after it; nil once the visitor has written since.
+    private var repliedAt: Date?
+    private var feedbackCheckedAt = Date.distantPast
 
     private static let reconnectDelays: [Double] = [0.5, 1, 2, 5, 10]
     private static let pollInterval: UInt64 = 1_500_000_000
     private static let pollWindow: TimeInterval = 45
     private static let subscribeTimeout: UInt64 = 10_000_000_000
+    // Nothing pushes the feedback moment without a socket either, so polling
+    // asks for it, around the two times Vatio offers one after the agent
+    // speaks: a few seconds later when the visitor closed the topic, two
+    // minutes later when they went quiet. Every few seconds inside those
+    // windows (measured from when the reply arrived), not on every poll.
+    private static let feedbackCheckInterval: TimeInterval = 5
+    private static let feedbackCheckWindows: [ClosedRange<TimeInterval>] = [0...45, 120...150]
 
     /// `visitorToken` says who the visitor is when your app already knows:
     /// a token your backend signed for the signed-in user (see
@@ -153,6 +164,7 @@ public final class VatioChat: ObservableObject {
             confirm(pending, as: result?.message?.message, id: result?.user_message_id)
             // Writing again moves the conversation on, and the moment with it.
             if feedback?.rating == nil { feedback = nil }
+            repliedAt = nil
             if !subscribed { pollFor(Self.pollWindow) }
         } catch {
             messages.removeAll { $0.id == pending.id }
@@ -388,6 +400,7 @@ public final class VatioChat: ObservableObject {
         current = nil
         isTyping = false
         feedback = nil
+        repliedAt = nil
         stopPolling()
         releaseWaiters()
     }
@@ -408,13 +421,27 @@ public final class VatioChat: ObservableObject {
         feedback = try vatio.decode(WireFeedbackEnvelope.self, data).feedback?.feedback
     }
 
-    private func refreshFeedback() async {
+    private func refreshFeedback(onlyIf wanted: () -> Bool = { true }) async {
         guard let chat = current,
               let data = try? await vatio.request("GET", "chats/\(chat.chatID)/feedback", bearer: chat.chatToken),
               let envelope = try? vatio.decode(WireFeedbackEnvelope.self, data),
-              current?.chatID == chat.chatID else { return }
+              current?.chatID == chat.chatID, wanted() else { return }
         let offered = envelope.feedback?.feedback
         if offered != feedback { feedback = offered }
+    }
+
+    /// Polling's stand-in for the `.feedback` event: see `feedbackCheckWindows`.
+    private func pollFeedback() async {
+        guard !subscribed, feedback == nil, let repliedAt else { return }
+        let now = Date()
+        let elapsed = now.timeIntervalSince(repliedAt)
+        guard now.timeIntervalSince(feedbackCheckedAt) >= Self.feedbackCheckInterval,
+              Self.feedbackCheckWindows.contains(where: { $0.contains(elapsed) }) else { return }
+
+        feedbackCheckedAt = now
+        // A send while this is out moves the conversation on, which makes
+        // what it finds stale.
+        await refreshFeedback(onlyIf: { self.repliedAt == repliedAt })
     }
 
     // MARK: - Fallbacks
@@ -443,6 +470,7 @@ public final class VatioChat: ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 if self.closed || self.subscribed || Date() > self.pollUntil { break }
                 await self.resync()
+                await self.pollFeedback()
             }
             self?.pollTask = nil
         }
@@ -484,6 +512,7 @@ public final class VatioChat: ObservableObject {
             messages.append(message)
             known.insert(message.id)
             lastMessageID = max(lastMessageID, message.id)
+            if message.role != .user { repliedAt = Date() }
         }
         sort()
     }
