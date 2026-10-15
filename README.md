@@ -198,6 +198,9 @@ xcrun simctl launch booted ai.vatio.example \
 
 `project.yml` regenerates the project with `xcodegen generate`.
 
+For a whole app on the SDK, with the conversation list, voice notes, the
+feedback card and settings, see [Vatio Chat for iOS](https://github.com/vatio-ai/vatio-chat-ios).
+
 ## Files and voice notes
 
 `send(_:attachments:)` takes up to four `VatioUpload`s — an image (JPEG, PNG,
