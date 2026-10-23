@@ -3,8 +3,8 @@ import Vatio
 
 // A dummy app for trying the SDK: a home screen with an ask bar at the
 // bottom, a conversation tab where the agent answers, and a settings tab for
-// the workspace and token. Allow `ios-app://ai.vatio.example` on the token
-// first: `vatio tokens create --env preview --origin ios-app://ai.vatio.example`.
+// the workspace and token. Allow `ios-app://ai.vatio.example` on the key
+// first (https://vatio.ai/docs/sdk/ios).
 //
 // Settings are UserDefaults, so they can also come from launch arguments:
 //   xcrun simctl launch booted ai.vatio.example -workspace acme -token vatpub_...

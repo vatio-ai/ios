@@ -195,7 +195,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Workspace")
                 } footer: {
-                    Text("Agrega ios-app://\(Bundle.main.bundleIdentifier ?? "") a los orígenes del token: vatio tokens origins.")
+                    Text("Agrega ios-app://\(Bundle.main.bundleIdentifier ?? "") a los orígenes del token: vatio keys origins.")
                 }
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()

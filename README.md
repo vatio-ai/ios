@@ -24,15 +24,9 @@ skills). See [An AI agent in your iOS app](https://vatio.ai/guides/ai-agent-in-y
 
 ## Setup
 
-**1. Allow your app.** A publishable token only works from its own allowed
-origins. Your app's origin is `ios-app://` plus its bundle id:
-
-```bash
-vatio tokens create --env live --label ios --origin ios-app://com.acme.app
-```
-
-To add it to a token you already have, use `vatio tokens origins PREFIX URL...`
-or the tokens section of **Channels → Web widget** in the inbox.
+**1. Allow your app.** A publishable key only works from the origins it
+allows, and an iOS app has its own. Creating the key and allowing the app is
+in the iOS guide: <https://vatio.ai/docs/sdk/ios>.
 
 **2. Add the package** `https://github.com/vatio-ai/ios` in Xcode
 (File → Add Package Dependencies…) or in `Package.swift`, and import `Vatio`:
