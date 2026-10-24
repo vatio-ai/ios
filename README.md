@@ -20,7 +20,7 @@ npx @vatio-ai/skills
 Then, in Claude Code, `/vatio-init` creates the agent from your app, and
 `/vatio-add-to-app` adds this package, the tokens and a SwiftUI chat screen in your
 app's style (in Cursor or Codex, ask it to use those
-skills). See [An AI agent in your iOS app](https://vatio.ai/guides/ai-agent-in-your-ios-app).
+skills). See [An AI agent in your iOS app](https://vatio.ai/docs/guides/ai-agent-in-your-ios-app).
 
 ## Setup
 
