@@ -11,7 +11,7 @@ import Foundation
 /// steps are in https://vatio.ai/docs/sdk/ios.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.4.2"
+    public static let version = "0.4.3"
 
     public let workspace: String
     public let token: String
@@ -53,17 +53,21 @@ public struct Vatio: Sendable {
         return try decode(WireConfig.self, data).config
     }
 
-    /// Every conversation this visitor has had on this workspace from this
-    /// device, newest first. `[]` for a visitor who never talked here. Pass
-    /// the same `visitorToken` you give `VatioChat`.
+    /// Every conversation this visitor has had on this workspace, newest
+    /// first. `[]` for a visitor who never talked here. Pass the same
+    /// `visitorToken` you give `VatioChat`: a signed-in visitor's
+    /// conversations come back on any device, after a reinstall too.
     public func conversations(visitorToken: String? = nil) async throws -> [VatioConversation] {
         try validateToken()
-        guard let visitorRef = storage(visitorToken).visitorRef else { return [] }
+        let visitorToken = visitorToken.flatMap { $0.isEmpty ? nil : $0 }
+        let visitorRef = storage(visitorToken).visitorRef
+        guard visitorRef != nil || visitorToken != nil else { return [] }
 
-        // A conversation this person had signed in is listed only alongside
-        // their token.
-        var request = try urlRequest("GET", "chats?visitor_ref=\(queryEscaped(visitorRef))", bearer: token)
-        if let visitorToken, !visitorToken.isEmpty {
+        // A conversation this person had signed in is listed by their token,
+        // and only alongside it.
+        let query = visitorRef.map { "?visitor_ref=\(queryEscaped($0))" } ?? ""
+        var request = try urlRequest("GET", "chats\(query)", bearer: token)
+        if let visitorToken {
             request.setValue(visitorToken, forHTTPHeaderField: "Vatio-Visitor-Token")
         }
         let data = try await send(request)
