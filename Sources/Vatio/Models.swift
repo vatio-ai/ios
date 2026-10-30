@@ -34,12 +34,24 @@ public struct VatioMessage: Identifiable, Hashable, Sendable {
     /// `content` is only a stand-in ("Image", "Audio") for a message that was
     /// just a file: draw the attachment, not the word.
     public let isMediaLabel: Bool
+    /// Links the agent's reply sends as buttons. `content` still has each one
+    /// as the agent wrote it, for a client that draws none: to draw them, show
+    /// `textWithoutButtons` and a button per entry under it.
+    public let buttons: [VatioButton]
 
     public var isFromVisitor: Bool { role == .user }
 
+    /// `content` without the links its buttons carry, for the text above the
+    /// buttons. A link on a line of its own takes the line with it, one inside
+    /// a sentence leaves its words: how Vatio takes it out of a WhatsApp
+    /// message.
+    public var textWithoutButtons: String {
+        buttons.filter(\.isLink).reduce(content) { text, button in withoutLink(text, button.link) }
+    }
+
     public init(
         id: Int, role: Role, content: String, createdAt: Date? = nil, isPending: Bool = false,
-        attachments: [VatioAttachment] = [], isMediaLabel: Bool = false
+        attachments: [VatioAttachment] = [], isMediaLabel: Bool = false, buttons: [VatioButton] = []
     ) {
         self.id = id
         self.role = role
@@ -48,7 +60,69 @@ public struct VatioMessage: Identifiable, Hashable, Sendable {
         self.isPending = isPending
         self.attachments = attachments
         self.isMediaLabel = isMediaLabel
+        self.buttons = buttons
     }
+}
+
+/// A link the reply sends as a button.
+public struct VatioButton: Hashable, Sendable {
+    /// `url` today. Skip a button whose type you do not know.
+    public let type: String
+    /// What the button says, in the visitor's language.
+    public let title: String
+    /// Where it goes, for a `url` button.
+    public var url: URL? { URL(string: link) }
+
+    // As sent, which is how it is written in `content` too.
+    let link: String
+
+    public init(type: String = "url", title: String, url: String) {
+        self.type = type
+        self.title = title
+        self.link = url
+    }
+
+    var isLink: Bool {
+        type == "url" && (link.lowercased().hasPrefix("https://") || link.lowercased().hasPrefix("http://"))
+    }
+}
+
+private let leftover = try! NSRegularExpression(pattern: "^[\\s\\p{P}\\p{S}]*$")
+
+private func withoutLink(_ text: String, _ url: String) -> String {
+    let escaped = NSRegularExpression.escapedPattern(for: url)
+    guard let markdown = try? NSRegularExpression(pattern: "\\[([^\\]\\n]*)\\]\\(" + escaped + "\\)"),
+          let bare = try? NSRegularExpression(pattern: escaped + "\\.?") else { return text }
+    var lines = text.components(separatedBy: "\n")
+    guard let index = lines.firstIndex(where: { firstMatch(markdown, in: $0) != nil || $0.contains(url) }) else {
+        return text
+    }
+
+    let line = lines[index] as NSString
+    let kept: String?
+    if let match = firstMatch(markdown, in: lines[index]) {
+        let label = line.substring(with: match.range(at: 1))
+        let rest = line.replacingCharacters(in: match.range, with: "")
+        kept = isLeftover(rest) ? nil : line.replacingCharacters(in: match.range, with: label)
+    } else if let match = firstMatch(bare, in: lines[index]) {
+        let rest = line.replacingCharacters(in: match.range, with: "")
+        kept = isLeftover(rest) ? nil : rest
+    } else {
+        kept = lines[index]
+    }
+    if let kept { lines[index] = kept } else { lines.remove(at: index) }
+    return lines.joined(separator: "\n")
+        .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+        .replacingOccurrences(of: "[ \t]{2,}", with: " ", options: .regularExpression)
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+private func firstMatch(_ regex: NSRegularExpression, in string: String) -> NSTextCheckingResult? {
+    regex.firstMatch(in: string, range: NSRange(string.startIndex..., in: string))
+}
+
+private func isLeftover(_ string: String) -> Bool {
+    firstMatch(leftover, in: string) != nil
 }
 
 /// A file on a message.
@@ -194,6 +268,7 @@ struct WireMessage: Decodable {
     let occurred_at: String?
     let attachments: [WireAttachment]?
     let content_is_media_label: Bool?
+    let buttons: [WireButton]?
 
     var message: VatioMessage {
         VatioMessage(
@@ -202,8 +277,20 @@ struct WireMessage: Decodable {
             content: content ?? "",
             createdAt: parseDate(occurred_at ?? created_at),
             attachments: (attachments ?? []).map(\.attachment),
-            isMediaLabel: content_is_media_label ?? false
+            isMediaLabel: content_is_media_label ?? false,
+            buttons: (buttons ?? []).compactMap(\.button)
         )
+    }
+}
+
+struct WireButton: Decodable {
+    let type: String?
+    let title: String?
+    let url: String?
+
+    var button: VatioButton? {
+        guard let title, let url else { return nil }
+        return VatioButton(type: type ?? "url", title: title, url: url)
     }
 }
 

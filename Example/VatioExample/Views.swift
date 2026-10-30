@@ -125,23 +125,41 @@ struct Bubble: View {
     var onProgress: () -> Void = {}
     var onFinish: () -> Void = {}
 
+    // A link the reply sends as a button is drawn as one under the bubble,
+    // and comes out of the text above it.
+    private var buttons: [(title: String, url: URL)] {
+        message.buttons.compactMap { button in
+            guard button.type == "url", let url = button.url else { return nil }
+            return (button.title, url)
+        }
+    }
+
     var body: some View {
         HStack {
             if message.isFromVisitor { Spacer(minLength: 40) }
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(message.attachments) { AttachmentView(attachment: $0, onVisitorSide: message.isFromVisitor) }
-                // A file-only message carries a stand-in ("Image"); the file
-                // above already says it.
-                if !message.isMediaLabel && !message.content.isEmpty {
-                    TypewriterText(text: message.content, paints: paints, onProgress: onProgress, onFinish: onFinish)
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(message.attachments) { AttachmentView(attachment: $0, onVisitorSide: message.isFromVisitor) }
+                    // A file-only message carries a stand-in ("Image"); the file
+                    // above already says it.
+                    if !message.isMediaLabel && !message.content.isEmpty {
+                        TypewriterText(text: message.textWithoutButtons, paints: paints, onProgress: onProgress, onFinish: onFinish)
+                    }
+                }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(message.isFromVisitor ? Color.accentColor : Color(.secondarySystemBackground))
+                    .foregroundStyle(message.isFromVisitor ? .white : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .opacity(message.isPending ? 0.6 : 1)
+                ForEach(buttons, id: \.url) { button in
+                    Link(destination: button.url) {
+                        Label(button.title, systemImage: "arrow.up.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(message.isFromVisitor ? Color.accentColor : Color(.secondarySystemBackground))
-                .foregroundStyle(message.isFromVisitor ? .white : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .opacity(message.isPending ? 0.6 : 1)
             if !message.isFromVisitor { Spacer(minLength: 40) }
         }
     }

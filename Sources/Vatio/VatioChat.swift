@@ -358,7 +358,7 @@ public final class VatioChat: ObservableObject {
             let old = messages[index]
             messages[index] = VatioMessage(
                 id: old.id, role: old.role, content: content, createdAt: old.createdAt,
-                attachments: old.attachments, isMediaLabel: isMediaLabel
+                attachments: old.attachments, isMediaLabel: isMediaLabel, buttons: old.buttons
             )
 
         case .closed:

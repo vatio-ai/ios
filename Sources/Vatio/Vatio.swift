@@ -11,7 +11,7 @@ import Foundation
 /// steps are in https://vatio.ai/docs/sdk/ios.
 /// A `vat_` token is a developer secret and must never ship in an app.
 public struct Vatio: Sendable {
-    public static let version = "0.4.3"
+    public static let version = "0.5.0"
 
     public let workspace: String
     public let token: String

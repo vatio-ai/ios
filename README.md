@@ -31,7 +31,7 @@ in the iOS guide: <https://vatio.ai/docs/sdk/ios>.
 (File → Add Package Dependencies…) or in `Package.swift`, and import `Vatio`:
 
 ```swift
-.package(url: "https://github.com/vatio-ai/ios", from: "0.4.3")
+.package(url: "https://github.com/vatio-ai/ios", from: "0.5.0")
 ```
 
 **3. Create a client** with the `vatpub_` token. It is meant to ship inside
